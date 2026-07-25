@@ -186,7 +186,8 @@ FILENAME_RE = re.compile(
 
 ```
 The Zero-Index TrapA critical detail in data preprocessing involved label remapping. The raw `location` field in Widar runs from 1 to 5. However, PyTorch's `CrossEntropyLoss` is strictly zero-indexed—passing a label of `5` to a 5-neuron output layer throws a fatal `IndexError: Target 5 is out of bounds`. To ensure pipeline stability, the labels are passed through a `remap_labels` function that maps `{1, 2, 3, 4, 5}` to `{0, 1, 2, 3, 4}` before reaching any classifier.
-### 2. Feature Extraction: Static vs. Motion ViewsThe raw CSI tensor extracted via `csiread` has the shape `(Time, Antennas, Subcarriers)`. The foundation of this experiment relies on extracting two radically different perspectives from this raw amplitude tensor.
+### 2. Feature Extraction: Static vs. Motion Views
+The raw CSI tensor extracted via `csiread` has the shape `(Time, Antennas, Subcarriers)`. The foundation of this experiment relies on extracting two radically different perspectives from this raw amplitude tensor.
 #### A. The Static Fingerprint (`amplitude_snapshot`)The "amplitude snapshot" is the cornerstone of traditional WiFi CSI fingerprinting systems like DeepFi, RADAR, and Horus. In this pipeline, it serves as the feature extractor for the baseline $k$-NN classifier. It mathematically squashes the `Time` dimension to create a single, static spatial fingerprint of the environment.
 
 
