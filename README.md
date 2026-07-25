@@ -179,7 +179,9 @@ $$\mathbf{y} = (\mathbf{A}^T \mathbf{A})^{-1} \mathbf{A}^T \mathbf{b}$$
 FILENAME_RE = re.compile(
       r"user(?P\d+)-(?P\d+)-(?P\d+)-"
       r"(?P\d+)-(?P\d+)-r(?P\d+).dat"
-      )def parse_label_from_filename(path):
+      )
+
+def parse_label_from_filename(path):
       m = FILENAME_RE.search(os.path.basename(path))
       if m is None: return None
       return int(m.group("location"))
