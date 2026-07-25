@@ -140,8 +140,9 @@ fingerprint of shape (n_antennas * n_subcarriers,)."""
 mean_amp = amp_seq.mean(axis=0)                # (antennas, subcarriers)
 flat = mean_amp.flatten()
 norm = np.linalg.norm(flat) + 1e-8
-return flat / norm
-```The Mechanics of the Snapshot:
+return flat / norm 
+
+The Mechanics of the Snapshot:
 \1. Time-Averaging (`mean(axis=0)`): The function takes a burst of packets collected over a short window and averages their amplitudes, explicitly destroying temporal information.
 \2. Flattening: It converts the `(Antennas, Subcarriers)` matrix into a 1D vector (e.g., $3 \times 30 = 90$ features).
 \3. L2 Normalization: It divides the vector by its L2 norm. This makes the feature invariant to absolute transmission power—if the router suddenly transmits at half power, the normalized geometric "shape" of the fingerprint remains identical.Because this feature explicitly destroys all temporal information to create a static spatial map, it profoundly affected how the $k$-NN classifier responded to different conditions later in the stress tests.#### B. The Event-Based Motion View (`delta_sequence`)Drones are defined by movement. To test if we can classify locations based on multipath *dynamics* rather than static signatures, the SNN pipeline takes the first-order difference between consecutive packets.```python
