@@ -163,6 +163,35 @@ def delta_sequence(amp_seq):
 By utilizing `np.diff`, the static environmental background is mathematically erased. The constant terms vanish. The SNN network is completely blind to absolute signal strength and must classify the location based purely on the frequency and structure of the amplitude fluctuations.
 ### 3. Baseline Classifier Performance (k-NN)
 To satisfy the "simple classifier" requirement, I built a 1-Nearest Neighbor model running on the `amplitude_snapshot` features. Under standard, static conditions (collected by a stationary receiver), this feature is incredibly powerful. Because radio multipath fading creates a highly unique pattern of peaks and nulls across the 30 subcarriers at any specific location in a room, the average shape is a nearly perfect spatial barcode.Testing on a subset of 4,500 real data files, the k-NN model achieved 93.5% accuracy on real Widar data (and 100% on synthetic data).Final Confusion Matrix (Real Widar 3.0 Data):
+```mermaid
+graph TD
+    classDef default fill:#1e293b,stroke:#334155,stroke-width:2px,color:#f8fafc;
+    classDef input fill:#1e3a8a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef split fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef train fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+    classDef test fill:#7c2d12,stroke:#f97316,stroke-width:2px,color:#f8fafc;
+    classDef predict fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef eval fill:#881337,stroke:#f43f5e,stroke-width:2px,color:#f8fafc;
+
+    A[<b>1. Function Inputs</b><br/>X, y, k, test_size, seed]:::input
+    B[<b>2. Train/Test Split</b><br/>train_test_split stratify=y]:::split
+    
+    C[<b>3. Initialize & Train</b><br/>KNeighborsClassifier<br/>clf.fit]:::train
+    D[<b>Test Data Held Out</b><br/>X_test, y_test]:::test
+    
+    E[<b>4. Inference</b><br/>y_pred = clf.predict]:::predict
+    F[<b>5. Evaluation Metrics</b><br/>accuracy_score, confusion_matrix]:::eval
+    G([<b>6. Return Output</b><br/>clf, acc, cm, split_data])
+
+    A --> B
+    B -->|X_train, y_train| C
+    B -->|X_test, y_test| D
+    C --> E
+    D -->|X_test| E
+    E --> F
+    D -->|y_test| F
+    F --> G
+```
 ```text
 [[253   0   6   5   6]
 [  1 258   2   1   8]
