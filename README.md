@@ -150,9 +150,9 @@ norm = np.linalg.norm(flat) + 1e-8
 return flat / norm 
 ```
 The Mechanics of the Snapshot:
-\1. Time-Averaging (`mean(axis=0)`): The function takes a burst of packets collected over a short window and averages their amplitudes, explicitly destroying temporal information.
-\2. Flattening: It converts the `(Antennas, Subcarriers)` matrix into a 1D vector (e.g., $3 \times 30 = 90$ features).
-\3. L2 Normalization: It divides the vector by its L2 norm. This makes the feature invariant to absolute transmission power—if the router suddenly transmits at half power, the normalized geometric "shape" of the fingerprint remains identical.Because this feature explicitly destroys all temporal information to create a static spatial map, it profoundly affected how the $k$-NN classifier responded to different conditions later in the stress tests.#### B. The Event-Based Motion View (`delta_sequence`)Drones are defined by movement. To test if we can classify locations based on multipath *dynamics* rather than static signatures, the SNN pipeline takes the first-order difference between consecutive packets.
+1. Time-Averaging (`mean(axis=0)`): The function takes a burst of packets collected over a short window and averages their amplitudes, explicitly destroying temporal information.
+2. Flattening: It converts the `(Antennas, Subcarriers)` matrix into a 1D vector (e.g., $3 \times 30 = 90$ features).
+3. L2 Normalization: It divides the vector by its L2 norm. This makes the feature invariant to absolute transmission power—if the router suddenly transmits at half power, the normalized geometric "shape" of the fingerprint remains identical.Because this feature explicitly destroys all temporal information to create a static spatial map, it profoundly affected how the $k$-NN classifier responded to different conditions later in the stress tests.#### B. The Event-Based Motion View (`delta_sequence`)Drones are defined by movement. To test if we can classify locations based on multipath *dynamics* rather than static signatures, the SNN pipeline takes the first-order difference between consecutive packets.
 ```python
 def delta_sequence(amp_seq):
 """packet-to-packet amplitude deltas, flattened and scaled to unit std."""
@@ -206,4 +206,13 @@ def doppler_phase_ramp(amp_seq, ramp_strength=0.02):
 ramp = np.linspace(0, ramp_strength * T, T)
 return amp_seq * (1 + ramp[:, None, None])
 ```
-* The Effect: Standard sanitization algorithms often fit and remove a constant linear-phase term, assuming the receiver is stationary. A translating drone introduces real Doppler shifts that confound static sanitization steps. The SNN struggled heavily here, as the constant translation creates a persistent DC offset in the delta sequence, triggering continuous false firings.### ConclusionTranslating WiFi CSI localization to drones is not a matter of simply mounting a receiver to a quadcopter.The amplitude snapshot feature assumes the receiver is entirely still. While this averaging makes it brilliantly robust against high-frequency zero-mean noise (like motor vibration), it is fatally brittle when deployed on a drone that tilts, yaws, and changes its physical orientation in 3D space. Conversely, motion-sensitive systems (like delta-encoded SNNs) are highly susceptible to the motor vibrations and constant translation inherent to flight.A successful drone-based CSI navigation system will likely require a multimodal approach: using the IMU to constantly un-rotate the CSI phase matrices (solving the tilt issue), coupled with specialized low-pass filters tuned to reject the drone's known motor RPM frequencies (solving the vibration issue) before the CSI data ever reaches the neural network.
+* The Effect: Standard sanitization algorithms often fit and remove a constant linear-phase term, assuming the receiver is stationary. A translating drone introduces real Doppler shifts that confound static sanitization steps. The SNN struggled heavily here, as the constant translation creates a persistent DC offset in the delta sequence, triggering continuous false firings.
+
+### Conclusion
+Translating WiFi CSI localization to dynamic drones cannot be solved by simply tweaking software algorithms or mounting a standard receiver onto a quadcopter. Software-based CSI methodologies fundamentally break under real-world flight dynamics:
+
+* Phase-Based AoA (SpotFi): Rapid pitch/roll tilting, motor vibration, and spatial translation constantly distort the physical antenna baseline, destroying the phase coherency required for MUSIC-style geometric processing. Furthermore, 2.4 GHz signal wavelengths (~12.5 cm) are too large for compact drone frames, causing severe spatial aliasing.
+
+* Amplitude-Based Fingerprinting (DeepFi): Doppler shifts and propeller turbulence continuously warp the indoor multipath environment, requiring impossible online recalibration. This is further compounded by hardware Automatic Gain Control (AGC), which artificially inflates or attenuates raw CSI signals and renders amplitude useless for absolute ranging.
+
+Rather than attempting fragile software workarounds (like IMU un-rotation or noise filtering), a truly reliable system requires abandoning compact onboard software/ML approaches entirely. The viable path forward is a macroscopic, hardware-accelerated Time Difference of Arrival (TDoA) system—deploying distributed passive sniffer ASICs equipped with multi-phase clocking (156.25 ps timing resolution) and fixed preamble triggering to achieve precise, dynamics-immune multilateration.
