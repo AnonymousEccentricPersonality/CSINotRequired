@@ -122,7 +122,9 @@ $$\mathbf{y} = (\mathbf{A}^T \mathbf{A})^{-1} \mathbf{A}^T \mathbf{b}$$
 
  ## Part 2: Implementation and Drone Motion Analysis
  
- To answer the fundamental question of how WiFi CSI behaves differently on a moving drone compared to a static router, I implemented a dual-pipeline machine learning architecture. Rather than just running a standard classifier, I built a system designed to compare a traditional static spatial fingerprinting approach (a 1-Nearest Neighbor baseline) against a biologically-inspired Spiking Neural Network (SNN) that explicitly processes *continuous change*.The codebase handles data loading, feature extraction, classification, and a custom physics-based "stress test" module that mathematically corrupts static data to simulate drone flight.### 1. The Dataset and Label ExtractionFor this assignment, I utilized the Widar 3.0 dataset, publicly available on the IEEE Dataport. Widar contains raw Intel 5300 format .dat files collected using static laptops and antennas.Data Labeling from FilenamesWidar does not use a separate metadata CSV for labels. Instead, every piece of ground truth is baked directly into the filename string using a strict convention: `user-gesture-location-orientation-repetition-receiver.dat`.To extract the location label (which is the target for our classifier), I implemented a regex parser during the data loading phase:
+ To answer the fundamental question of how WiFi CSI behaves differently on a moving drone compared to a static router, I implemented a dual-pipeline machine learning architecture. Rather than just running a standard classifier, I built a system designed to compare a traditional static spatial fingerprinting approach (a 1-Nearest Neighbor baseline) against a biologically-inspired Spiking Neural Network (SNN) that explicitly processes *continuous change*.The codebase handles data loading, feature extraction, classification, and a custom physics-based "stress test" module that mathematically corrupts static data to simulate drone flight.
+ ### 1. The Dataset and Label Extraction
+ For this assignment, I utilized the Widar 3.0 dataset, publicly available on the IEEE Dataport. Widar contains raw Intel 5300 format .dat files collected using static laptops and antennas.Data Labeling from FilenamesWidar does not use a separate metadata CSV for labels. Instead, every piece of ground truth is baked directly into the filename string using a strict convention: `user-gesture-location-orientation-repetition-receiver.dat`.To extract the location label (which is the target for our classifier), I implemented a regex parser during the data loading phase:
  ```python
 FILENAME_RE = re.compile(
 r"user(?P\d+)-(?P\d+)-(?P\d+)-"
@@ -133,7 +135,9 @@ if m is None: return None
 return int(m.group("location"))
 
 ```
-The Zero-Index TrapA critical detail in data preprocessing involved label remapping. The raw `location` field in Widar runs from 1 to 5. However, PyTorch's `CrossEntropyLoss` is strictly zero-indexed—passing a label of `5` to a 5-neuron output layer throws a fatal `IndexError: Target 5 is out of bounds`. To ensure pipeline stability, the labels are passed through a `remap_labels` function that maps `{1, 2, 3, 4, 5}` to `{0, 1, 2, 3, 4}` before reaching any classifier.### 2. Feature Extraction: Static vs. Motion ViewsThe raw CSI tensor extracted via `csiread` has the shape `(Time, Antennas, Subcarriers)`. The foundation of this experiment relies on extracting two radically different perspectives from this raw amplitude tensor.#### A. The Static Fingerprint (`amplitude_snapshot`)The "amplitude snapshot" is the cornerstone of traditional WiFi CSI fingerprinting systems like DeepFi, RADAR, and Horus. In this pipeline, it serves as the feature extractor for the baseline $k$-NN classifier. It mathematically squashes the `Time` dimension to create a single, static spatial fingerprint of the environment.
+The Zero-Index TrapA critical detail in data preprocessing involved label remapping. The raw `location` field in Widar runs from 1 to 5. However, PyTorch's `CrossEntropyLoss` is strictly zero-indexed—passing a label of `5` to a 5-neuron output layer throws a fatal `IndexError: Target 5 is out of bounds`. To ensure pipeline stability, the labels are passed through a `remap_labels` function that maps `{1, 2, 3, 4, 5}` to `{0, 1, 2, 3, 4}` before reaching any classifier.
+### 2. Feature Extraction: Static vs. Motion ViewsThe raw CSI tensor extracted via `csiread` has the shape `(Time, Antennas, Subcarriers)`. The foundation of this experiment relies on extracting two radically different perspectives from this raw amplitude tensor.
+#### A. The Static Fingerprint (`amplitude_snapshot`)The "amplitude snapshot" is the cornerstone of traditional WiFi CSI fingerprinting systems like DeepFi, RADAR, and Horus. In this pipeline, it serves as the feature extractor for the baseline $k$-NN classifier. It mathematically squashes the `Time` dimension to create a single, static spatial fingerprint of the environment.
 
 
 ```python
@@ -156,7 +160,9 @@ diffs = np.diff(amp_seq, axis=0)                # (T-1, antennas, subcarriers)
 flat = diffs.reshape(diffs.shape[0], -1)        # (T-1, antennas*subcarriers)
 return flat / (np.std(flat) + 1e-8)
 ```
-By utilizing `np.diff`, the static environmental background is mathematically erased. The constant terms vanish. The SNN network is completely blind to absolute signal strength and must classify the location based purely on the frequency and structure of the amplitude fluctuations.### 3. Baseline Classifier Performance (k-NN)To satisfy the "simple classifier" requirement, I built a 1-Nearest Neighbor model running on the `amplitude_snapshot` features. Under standard, static conditions (collected by a stationary receiver), this feature is incredibly powerful. Because radio multipath fading creates a highly unique pattern of peaks and nulls across the 30 subcarriers at any specific location in a room, the average shape is a nearly perfect spatial barcode.Testing on a subset of 4,500 real data files, the k-NN model achieved 93.5% accuracy on real Widar data (and 100% on synthetic data).Final Confusion Matrix (Real Widar 3.0 Data):
+By utilizing `np.diff`, the static environmental background is mathematically erased. The constant terms vanish. The SNN network is completely blind to absolute signal strength and must classify the location based purely on the frequency and structure of the amplitude fluctuations.
+### 3. Baseline Classifier Performance (k-NN)
+To satisfy the "simple classifier" requirement, I built a 1-Nearest Neighbor model running on the `amplitude_snapshot` features. Under standard, static conditions (collected by a stationary receiver), this feature is incredibly powerful. Because radio multipath fading creates a highly unique pattern of peaks and nulls across the 30 subcarriers at any specific location in a room, the average shape is a nearly perfect spatial barcode.Testing on a subset of 4,500 real data files, the k-NN model achieved 93.5% accuracy on real Widar data (and 100% on synthetic data).Final Confusion Matrix (Real Widar 3.0 Data):
 ```text
 [[253   0   6   5   6]
 [  1 258   2   1   8]
@@ -164,7 +170,9 @@ By utilizing `np.diff`, the static environmental background is mathematically er
 [  1   2   1 254  12]
 [  1   3   4  16 246]]
 ```
-As shown, errors are minimal and evenly distributed. The model easily memorizes the static environmental geometries.### 4. The Spiking Neural Network (DeltaSNN)Processing the `delta_sequence` requires a temporal model. I implemented a multi-layer Leaky Integrate-and-Fire (LIF) network using `snntorch`.Adaptive Threshold EncodingReal CSI subcarriers have vastly different dynamic ranges—some sit near deep fades and swing wildly, others barely move. Applying a single global threshold to generate spikes starves quiet channels and saturates noisy ones. To fix this, I implemented a per-channel adaptive threshold, calibrated *strictly* on the training split's standard deviation:
+As shown, errors are minimal and evenly distributed. The model easily memorizes the static environmental geometries.
+### 4. The Spiking Neural Network (DeltaSNN)
+Processing the `delta_sequence` requires a temporal model. I implemented a multi-layer Leaky Integrate-and-Fire (LIF) network using `snntorch`.Adaptive Threshold EncodingReal CSI subcarriers have vastly different dynamic ranges—some sit near deep fades and swing wildly, others barely move. Applying a single global threshold to generate spikes starves quiet channels and saturates noisy ones. To fix this, I implemented a per-channel adaptive threshold, calibrated *strictly* on the training split's standard deviation:
 ```python
 def compute_adaptive_thresholds(train_delta_seqs, k=1.0, min_threshold=1e-3):
 all_deltas = np.concatenate(train_delta_seqs, axis=0)
@@ -176,13 +184,16 @@ Membrane Potential ReadoutTraining SNN classifiers with Backpropagation Through 
 # Inside DeltaSNN forward pass:
 return torch.stack(mem2_trace, dim=0).mean(dim=0)  # (batch, n_classes)
 ```
-### 5. Answering the Prompt: What Changes on a Drone?Standard datasets like Widar are collected using fixed laptops. To answer the assignment's core question—*"what actually changes when the thing collecting CSI is a drone?"*—I engineered a `stress_test.py` module. This applies simulated physics corruptions to the static test data to observe how the assumptions of standard localization systems break down.Because the amplitude snapshot feature assumes the world—and the receiver—is entirely still, it profoundly affected how the baseline $k$-NN responded to different conditions.#### A. Orientation Shifts (The Tilt)Drones pitch and roll to translate. If a drone rotates, the geometric relationship between its antenna array and the incident incoming multipath signals changes completely.
+### 5. What Changes on a Drone?
+Standard datasets like Widar are collected using fixed laptops. To answer the assignment's core question—*"what actually changes when the thing collecting CSI is a drone?"*—I engineered a `stress_test.py` module. This applies simulated physics corruptions to the static test data to observe how the assumptions of standard localization systems break down.Because the amplitude snapshot feature assumes the world—and the receiver—is entirely still, it profoundly affected how the baseline $k$-NN responded to different conditions.#### A. Orientation Shifts (The Tilt)Drones pitch and roll to translate. If a drone rotates, the geometric relationship between its antenna array and the incident incoming multipath signals changes completely.
 ```python
 def orientation_shift(amp_seq, shift=1):
 """Roll along the antenna axis (axis=1)."""
 return np.roll(amp_seq, shift=shift, axis=1)
 ```
-* The Effect: The baseline $k$-NN failed spectacularly here, plummeting from 93.5% down to 20.1% (effectively random guessing).* Why: The snapshot relies on a fixed geometric relationship between the antennas. If Antenna 1 usually sees a strong signal and Antenna 3 sees a weak one, rolling the drone swaps these positions. The `(Antennas, Subcarriers)` grid is physically shifted, and the $k$-NN algorithm fails to match this rotated array to its database of flat, static fingerprints. Systems like SpotFi, which rely on precise Angle-of-Arrival (AoA) calculations, will fail entirely if the drone's orientation is not strictly compensated for using IMU data.#### B. Motor VibrationsDrone propellers operate at thousands of RPMs, causing high-frequency micro-vibrations across the airframe.
+* The Effect: The baseline $k$-NN failed spectacularly here, plummeting from 93.5% down to 20.1% (effectively random guessing).
+* Why: The snapshot relies on a fixed geometric relationship between the antennas. If Antenna 1 usually sees a strong signal and Antenna 3 sees a weak one, rolling the drone swaps these positions. The `(Antennas, Subcarriers)` grid is physically shifted, and the $k$-NN algorithm fails to match this rotated array to its database of flat, static fingerprints. Systems like SpotFi, which rely on precise Angle-of-Arrival (AoA) calculations, will fail entirely if the drone's orientation is not strictly compensated for using IMU data.
+#### B. Motor VibrationsDrone propellers operate at thousands of RPMs, causing high-frequency micro-vibrations across the airframe.
 ```python
 def vibration_jitter(amp_seq, freq_hz=200, packet_rate_hz=1000, amplitude=0.15):
 t = np.arange(T) / packet_rate_hz
