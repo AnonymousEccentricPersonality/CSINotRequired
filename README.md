@@ -68,6 +68,56 @@ SpotFi applies a Gaussian likelihood function across consecutive packets to filt
  * The 64 phase-delayed clocks are continuously driving a 64-bit sampling bus.
  * When the LUT strobe fires, the instantaneous state of all 64 clock lines is latched directly into a 64-bit shadow register.
  * By analyzing the sampled bits in this shadow register, the ASIC determines exactly which of the 64 clock phases the preamble arrived on, yielding the 156-picosecond timestamp.
+ ```mermaid
+ graph TD
+    %% Styling
+    classDef core fill:#0f172a,stroke:#3b82f6,stroke-width:2px,color:#f8fafc;
+    classDef signal fill:#1e1b4b,stroke:#8b5cf6,stroke-width:2px,color:#f8fafc;
+    classDef memory fill:#422006,stroke:#f59e0b,stroke-width:2px,color:#f8fafc;
+    classDef logic fill:#064e3b,stroke:#10b981,stroke-width:2px,color:#f8fafc;
+
+    %% Subgraph 1: Clocking
+    subgraph Clocking["1. Multi-Phase Clocking Core"]
+        ClkBase["Base Clock<br/>(100 MHz / 10 ns)"]:::signal
+        PLL["High-Performance<br/>DLL / PLL"]:::logic
+        Clk64["64 Phase-Delayed Clocks<br/>(156.25 ps resolution)"]:::signal
+
+        ClkBase --> PLL
+        PLL --> Clk64
+    end
+
+    %% Subgraph 2: Trigger
+    subgraph Trigger["2. LUT Preamble Trigger"]
+        RF["2.4 GHz RF Signal"]:::signal
+        RFFront["Downconvert & Digitize"]:::logic
+        DataStream["Baseband Digital Sequence"]:::signal
+        Correlator["High-Speed<br/>Hardware Correlator"]:::logic
+        LUT[/"Hard-coded LUT<br/>(Expected Sync Words)"/]:::memory
+        Strobe{"Match Found!<br/>(Single-cycle Strobe)"}:::signal
+
+        RF --> RFFront
+        RFFront --> DataStream
+        DataStream --> Correlator
+        LUT -.->|Reference Words| Correlator
+        Correlator -->|Triggers| Strobe
+    end
+
+    %% Subgraph 3: Shadow Register
+    subgraph Register["3. Shadow Register Transfer"]
+        Bus["64-bit Sampling Bus"]:::signal
+        ShadowReg["64-bit Shadow Register"]:::memory
+        Decoder["Phase Analysis"]:::logic
+        Timestamp(["Output: 156-picosecond Timestamp"]):::core
+
+        Bus --> ShadowReg
+        ShadowReg --> Decoder
+        Decoder --> Timestamp
+    end
+
+    %% Cross-component Connections
+    Clk64 ==>|Continuously Drives| Bus
+    Strobe ==>|Latches instantaneous state| ShadowReg
+```
 
  ### 4. Required Software Modifications
  For this hardware to function, a strict modification must be made to the drone's transmission software. Standard WiFi protocol headers are highly variable. To ensure the ASIC's LUT correlator triggers accurately and consistently, all drone communications must be forced to begin with a predetermined, fixed preamble word sequence. This guarantees a sharp correlation peak across all distributed corner nodes simultaneously.
