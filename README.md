@@ -190,7 +190,8 @@ def parse_label_from_filename(path):
 The Zero-Index TrapA critical detail in data preprocessing involved label remapping. The raw `location` field in Widar runs from 1 to 5. However, PyTorch's `CrossEntropyLoss` is strictly zero-indexed—passing a label of `5` to a 5-neuron output layer throws a fatal `IndexError: Target 5 is out of bounds`. To ensure pipeline stability, the labels are passed through a `remap_labels` function that maps `{1, 2, 3, 4, 5}` to `{0, 1, 2, 3, 4}` before reaching any classifier.
 ### 2. Feature Extraction: Static vs. Motion Views
 The raw CSI tensor extracted via `csiread` has the shape `(Time, Antennas, Subcarriers)`. The foundation of this experiment relies on extracting two radically different perspectives from this raw amplitude tensor.
-#### A. The Static Fingerprint (`amplitude_snapshot`)The "amplitude snapshot" is the cornerstone of traditional WiFi CSI fingerprinting systems like DeepFi, RADAR, and Horus. In this pipeline, it serves as the feature extractor for the baseline $k$-NN classifier. It mathematically squashes the `Time` dimension to create a single, static spatial fingerprint of the environment.
+#### A. The Static Fingerprint (`amplitude_snapshot`)
+The "amplitude snapshot" is the cornerstone of traditional WiFi CSI fingerprinting systems like DeepFi, RADAR, and Horus. In this pipeline, it serves as the feature extractor for the baseline $k$-NN classifier. It mathematically squashes the `Time` dimension to create a single, static spatial fingerprint of the environment.
 
 
 ```python
@@ -205,7 +206,9 @@ def amplitude_snapshot(amp_seq):
 The Mechanics of the Snapshot:
 1. Time-Averaging (`mean(axis=0)`): The function takes a burst of packets collected over a short window and averages their amplitudes, explicitly destroying temporal information.
 2. Flattening: It converts the `(Antennas, Subcarriers)` matrix into a 1D vector (e.g., $3 \times 30 = 90$ features).
-3. L2 Normalization: It divides the vector by its L2 norm. This makes the feature invariant to absolute transmission power—if the router suddenly transmits at half power, the normalized geometric "shape" of the fingerprint remains identical.Because this feature explicitly destroys all temporal information to create a static spatial map, it profoundly affected how the $k$-NN classifier responded to different conditions later in the stress tests.#### B. The Event-Based Motion View (`delta_sequence`)Drones are defined by movement. To test if we can classify locations based on multipath *dynamics* rather than static signatures, the SNN pipeline takes the first-order difference between consecutive packets.
+3. L2 Normalization: It divides the vector by its L2 norm. This makes the feature invariant to absolute transmission power—if the router suddenly transmits at half power, the normalized geometric "shape" of the fingerprint remains identical.Because this feature explicitly destroys all temporal information to create a static spatial map, it profoundly affected how the $k$-NN classifier responded to different conditions later in the stress tests.
+#### B. The Event-Based Motion View (`delta_sequence`)
+Drones are defined by movement. To test if we can classify locations based on multipath *dynamics* rather than static signatures, the SNN pipeline takes the first-order difference between consecutive packets.
 ```python
 def delta_sequence(amp_seq):
       """packet-to-packet amplitude deltas, flattened and scaled to unit std."""
@@ -267,7 +270,9 @@ Membrane Potential ReadoutTraining SNN classifiers with Backpropagation Through 
    return torch.stack(mem2_trace, dim=0).mean(dim=0)  # (batch, n_classes)
 ```
 ### 5. What Changes on a Drone?
-Standard datasets like Widar are collected using fixed laptops. To answer the assignment's core question—*"what actually changes when the thing collecting CSI is a drone?"*—I engineered a `stress_test.py` module. This applies simulated physics corruptions to the static test data to observe how the assumptions of standard localization systems break down.Because the amplitude snapshot feature assumes the world—and the receiver—is entirely still, it profoundly affected how the baseline $k$-NN responded to different conditions.#### A. Orientation Shifts (The Tilt)Drones pitch and roll to translate. If a drone rotates, the geometric relationship between its antenna array and the incident incoming multipath signals changes completely.
+Standard datasets like Widar are collected using fixed laptops. To answer the assignment's core question—*"what actually changes when the thing collecting CSI is a drone?"*—I engineered a `stress_test.py` module. This applies simulated physics corruptions to the static test data to observe how the assumptions of standard localization systems break down.Because the amplitude snapshot feature assumes the world—and the receiver—is entirely still, it profoundly affected how the baseline $k$-NN responded to different conditions.
+#### A. Orientation Shifts (The Tilt)
+Drones pitch and roll to translate. If a drone rotates, the geometric relationship between its antenna array and the incident incoming multipath signals changes completely.
 ```python
 def orientation_shift(amp_seq, shift=1):
      """Roll along the antenna axis (axis=1)."""
