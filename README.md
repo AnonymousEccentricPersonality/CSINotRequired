@@ -174,7 +174,7 @@ $$\mathbf{y} = (\mathbf{A}^T \mathbf{A})^{-1} \mathbf{A}^T \mathbf{b}$$
  
  To answer the fundamental question of how WiFi CSI behaves differently on a moving drone compared to a static router, I implemented a dual-pipeline machine learning architecture. Rather than just running a standard classifier, I built a system designed to compare a traditional static spatial fingerprinting approach (a 1-Nearest Neighbor baseline) against a biologically-inspired Spiking Neural Network (SNN) that explicitly processes *continuous change*.The codebase handles data loading, feature extraction, classification, and a custom physics-based "stress test" module that mathematically corrupts static data to simulate drone flight.
  ### 1. The Dataset and Label Extraction
- For this assignment, I utilized the Widar 3.0 dataset, publicly available on the IEEE Dataport. Widar contains raw Intel 5300 format .dat files collected using static laptops and antennas.Data Labeling from FilenamesWidar does not use a separate metadata CSV for labels. Instead, every piece of ground truth is baked directly into the filename string using a strict convention: `user-gesture-location-orientation-repetition-receiver.dat`.To extract the location label (which is the target for our classifier), I implemented a regex parser during the data loading phase:
+ For this assignment, I utilized the Widar 3.0 dataset, publicly available on the IEEE Dataport. Widar contains raw Intel 5300 format .dat files collected using static laptops and antennas. Data Labeling from FilenamesWidar does not use a separate metadata CSV for labels. Instead, every piece of ground truth is baked directly into the filename string using a strict convention: `user-gesture-location-orientation-repetition-receiver.dat`. To extract the location label (which is the target for our classifier), I implemented a regex parser during the data loading phase:
  ```python
 FILENAME_RE = re.compile(
       r"user(?P\d+)-(?P\d+)-(?P\d+)-"
@@ -280,7 +280,8 @@ def orientation_shift(amp_seq, shift=1):
 ```
 * The Effect: The baseline $k$-NN failed spectacularly here, plummeting from 93.5% down to 20.1% (effectively random guessing).
 * Why: The snapshot relies on a fixed geometric relationship between the antennas. If Antenna 1 usually sees a strong signal and Antenna 3 sees a weak one, rolling the drone swaps these positions. The `(Antennas, Subcarriers)` grid is physically shifted, and the $k$-NN algorithm fails to match this rotated array to its database of flat, static fingerprints. Systems like SpotFi, which rely on precise Angle-of-Arrival (AoA) calculations, will fail entirely if the drone's orientation is not strictly compensated for using IMU data.
-#### B. Motor VibrationsDrone propellers operate at thousands of RPMs, causing high-frequency micro-vibrations across the airframe.
+#### B. Motor Vibrations
+Drone propellers operate at thousands of RPMs, causing high-frequency micro-vibrations across the airframe.
 ```python
 def vibration_jitter(amp_seq, freq_hz=200, packet_rate_hz=1000, amplitude=0.15):
        t = np.arange(T) / packet_rate_hz
